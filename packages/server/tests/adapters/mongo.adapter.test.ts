@@ -406,3 +406,45 @@ describe("MongoAdapter integration scaffold", () => {
 		});
 	});
 });
+
+describe("MongoAdapter.exportTableData", () => {
+	let adapter: MongoAdapter;
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+		adapter = new MongoAdapter();
+	});
+
+	const mockCollectionWith = (docs: unknown[]) => {
+		const collection = { find: vi.fn(() => ({ limit: vi.fn(() => ({ toArray: vi.fn(async () => docs) })) })) };
+		mockGetMongoDb.mockResolvedValue({ collection: vi.fn(() => collection) });
+	};
+
+	it("serializes compound values to JSON strings while preserving scalars", async () => {
+		mockCollectionWith([
+			{ _id: "1", name: "Ada", age: 36, active: true, retired: null, profile: { role: "admin" }, tags: ["a", "b"] },
+		]);
+		const { cols, rows } = await adapter.exportTableData({ tableName: "users", db: "appdb" });
+		expect(cols).toEqual(
+			expect.arrayContaining(["_id", "name", "age", "active", "retired", "profile", "tags"]),
+		);
+		expect(rows[0]).toEqual({
+			_id: "1",
+			name: "Ada",
+			age: 36,
+			active: true,
+			retired: null,
+			profile: '{"role":"admin"}',
+			tags: '["a","b"]',
+		});
+		for (const value of Object.values(rows[0] ?? {})) {
+			expect(value === null || typeof value !== "object").toBe(true);
+		}
+	});
+
+	it("returns scalar rows unchanged", async () => {
+		mockCollectionWith([{ _id: "2", name: "Linus", age: 55 }]);
+		const { rows } = await adapter.exportTableData({ tableName: "users", db: "appdb" });
+		expect(rows).toEqual([{ _id: "2", name: "Linus", age: 55 }]);
+	});
+});
