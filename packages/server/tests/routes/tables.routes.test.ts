@@ -813,6 +813,34 @@ describe("Tables Routes", () => {
 			const json = await res.json();
 			expect(json.error).toBe('Table "products" does not exist');
 		});
+
+		it("should return 503 when database connection fails", async () => {
+			mockDao.renameTable.mockRejectedValue(
+				new Error("connect ECONNREFUSED")
+			);
+
+			const res = await app.request("/api/pg/tables/products/rename?db=testdb", {
+				method: "PATCH",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ newTableName: "product" }),
+			});
+
+			expect(res.status).toBe(503);
+		});
+
+		it("should return 500 when DAO throws database error", async () => {
+			mockDao.renameTable.mockRejectedValue(
+				new Error("relation already exists")
+			);
+
+			const res = await app.request("/api/pg/tables/products/rename?db=testdb", {
+				method: "PATCH",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ newTableName: "product" }),
+			});
+
+			expect(res.status).toBe(500);
+		});
 	});
 
 	// ============================================
