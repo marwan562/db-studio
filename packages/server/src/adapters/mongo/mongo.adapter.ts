@@ -4,6 +4,7 @@ import type {
 	AlterColumnParamsSchemaType,
 	BulkInsertRecordsParams,
 	BulkInsertResult,
+	CellValue,
 	ColumnInfoSchemaType,
 	ConnectionInfoSchemaType,
 	CreateTableSchemaType,
@@ -43,7 +44,7 @@ const normalizeValue = (value: unknown): unknown => {
 	if (typeof value === "bigint") return value.toString();
 	if (value && typeof value === "object") {
 		if ("_bsontype" in value && (value as { _bsontype?: string })._bsontype === "ObjectId") {
-			return (value as { toHexString: () => string }).toHexString();
+			return (value as unknown as { toHexString: () => string }).toHexString();
 		}
 		if (Array.isArray(value)) return value.map((item) => normalizeValue(item));
 		return Object.fromEntries(
@@ -388,12 +389,12 @@ export class MongoAdapter extends BaseAdapter {
 	}: {
 		tableName: string;
 		db: DatabaseSchemaType["db"];
-	}): Promise<{ cols: string[]; rows: Record<string, unknown>[] }> {
+	}): Promise<{ cols: string[]; rows: Record<string, CellValue>[] }> {
 		try {
 			const mongoDb = await getMongoDb(db);
 			const collection = mongoDb.collection(tableName);
 			const rows = await collection.find({}).limit(10000).toArray();
-			const normalized = rows.map((row) => normalizeDoc(row));
+			const normalized = rows.map((row) => normalizeDoc(row) as Record<string, CellValue>);
 			const cols = Array.from(new Set(normalized.flatMap((row) => Object.keys(row))));
 			return { cols, rows: normalized };
 		} catch (e) {
@@ -414,7 +415,13 @@ export class MongoAdapter extends BaseAdapter {
 			if (!databases[0]) {
 				throw new HTTPException(500, { message: "No databases returned from MongoDB" });
 			}
-			return databases.map((db) => ({
+			const SYSTEM_DATABASES = new Set(["admin", "config", "local"]);
+			const currentDb = getMongoDbName();
+			const visible = databases.filter(
+				(db) => !SYSTEM_DATABASES.has(db.name) || db.name === currentDb,
+			);
+			const finalList = visible.length > 0 ? visible : databases;
+			return finalList.map((db) => ({
 				name: db.name,
 				size: formatBytes(db.sizeOnDisk ?? 0),
 				owner: "n/a",
@@ -966,7 +973,11 @@ export class MongoAdapter extends BaseAdapter {
 				pkColumn === "_id" && canCoerce(pk.value) ? toMongoId(pk.value) : pk.value,
 			);
 			const result = await collection.deleteMany({ [pkColumn]: { $in: pkValues } });
-			return { deletedCount: result.deletedCount ?? 0 };
+			return {
+				deletedCount: result.deletedCount ?? 0,
+				fkViolation: false,
+				relatedRecords: [],
+			};
 		} catch (e) {
 			throw this.wrapError(e);
 		}

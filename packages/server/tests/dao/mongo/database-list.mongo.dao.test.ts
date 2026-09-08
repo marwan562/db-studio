@@ -51,11 +51,43 @@ describe("MongoDB Database List DAO", () => {
 
 			const result = await getMongoDatabasesList();
 
-			expect(result).toHaveLength(3);
-			expect(result[0].name).toBe("admin");
+			// system database "admin" is filtered out (current db is "testdb")
+			expect(result).toHaveLength(2);
+			expect(result[0].name).toBe("myapp");
 			expect(result[0].owner).toBe("n/a");
 			expect(result[0].encoding).toBe("n/a");
 			expect(result[0].size).toBeDefined();
+		});
+
+		it("filters system databases but keeps the current database", async () => {
+			const { getMongoDbName } = await import("@/db-manager.js");
+			vi.mocked(getMongoDbName).mockReturnValue("admin");
+			mockListDatabases.mockResolvedValue({
+				databases: [
+					{ name: "admin", sizeOnDisk: 40960 },
+					{ name: "config", sizeOnDisk: 1024 },
+					{ name: "myapp", sizeOnDisk: 1258291 },
+				],
+			});
+
+			const result = await getMongoDatabasesList();
+
+			expect(result.map((d) => d.name)).toEqual(["admin", "myapp"]);
+		});
+
+		it("falls back to all databases when only system databases exist", async () => {
+			const { getMongoDbName } = await import("@/db-manager.js");
+			vi.mocked(getMongoDbName).mockReturnValue("testdb");
+			mockListDatabases.mockResolvedValue({
+				databases: [
+					{ name: "admin", sizeOnDisk: 40960 },
+					{ name: "local", sizeOnDisk: 1024 },
+				],
+			});
+
+			const result = await getMongoDatabasesList();
+
+			expect(result).toHaveLength(2);
 		});
 
 		it("formats byte sizes in human-readable units", async () => {

@@ -368,7 +368,11 @@ export class SqliteAdapter extends BaseAdapter {
 			if (!rows.length)
 				throw new HTTPException(500, { message: "No databases returned from SQLite" });
 
-			return rows.map((row) => ({
+			// Hide SQLite's internal temp database; always keep at least one entry
+			// so a file with only main+temp never returns an empty list.
+			const visible = rows.filter((row) => row.name !== "temp");
+			const finalRows = visible.length > 0 ? visible : rows;
+			return finalRows.map((row) => ({
 				name: row.name,
 				size: this.getFileSize(row.file),
 				owner: "",

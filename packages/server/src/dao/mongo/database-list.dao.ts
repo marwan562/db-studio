@@ -31,7 +31,14 @@ export async function getMongoDatabasesList(): Promise<DatabaseInfoSchemaType[]>
 		});
 	}
 
-	return databases.map((db) => ({
+	const SYSTEM_DATABASES = new Set(["admin", "config", "local"]);
+	const currentDb = getMongoDbName();
+	const visible = databases.filter(
+		(db) => !SYSTEM_DATABASES.has(db.name) || db.name === currentDb,
+	);
+	const finalList = visible.length > 0 ? visible : databases;
+
+	return finalList.map((db) => ({
 		name: db.name,
 		size: formatBytes(db.sizeOnDisk ?? 0),
 		owner: "n/a",

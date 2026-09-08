@@ -22,7 +22,7 @@ const docs = [
 	{ _id: "2", name: "Linus", age: 55 },
 ];
 
-function cursor(data = docs) {
+function cursor(data: Record<string, unknown>[] = docs) {
 	const chain = {
 		sort: vi.fn(),
 		skip: vi.fn(),
@@ -47,7 +47,7 @@ function createMongoMocks() {
 		}),
 		updateMany: vi.fn(async () => ({ matchedCount: 2, modifiedCount: 2 })),
 		updateOne: vi.fn(async () => ({ matchedCount: 1, modifiedCount: 1 })),
-		insertOne: vi.fn(async () => ({ insertedId: "inserted" })),
+		insertOne: vi.fn(async () => ({ insertedId: "inserted" as string | null })),
 		insertMany: vi.fn(async (records: unknown[]) => ({ insertedCount: records.length })),
 		deleteOne: vi.fn(async () => ({ deletedCount: 1 })),
 		deleteMany: vi.fn(async () => ({ deletedCount: 1 })),
@@ -181,7 +181,7 @@ describe("MongoAdapter integration scaffold", () => {
 				tableName: "users",
 				primaryKeys: [{ columnName: "_id", value: "1" }],
 			}),
-		).toEqual({ deletedCount: 1 });
+		).toEqual({ deletedCount: 1, fkViolation: false, relatedRecords: [] });
 		expect(
 			await adapter.forceDeleteRecords({
 				db: "appdb",
@@ -357,9 +357,52 @@ describe("MongoAdapter integration scaffold", () => {
 		expect(adapter.mapFromUniversalType("date")).toBe("date");
 		expect(adapter.mapFromUniversalType("array")).toBe("array");
 		expect(adapter.mapFromUniversalType("unknown")).toBe("string");
-		expect((adapter as { quoteIdentifier: (name: string) => string }).quoteIdentifier("users")).toBe("users");
 		expect(
-			(adapter as { buildCursors: () => { nextCursor: null; prevCursor: null } }).buildCursors(),
+			(adapter as unknown as { quoteIdentifier: (name: string) => string }).quoteIdentifier(
+				"users",
+			),
+		).toBe("users");
+		expect(
+			(
+				adapter as unknown as {
+					buildCursors: () => { nextCursor: null; prevCursor: null };
+				}
+			).buildCursors(),
 		).toEqual({ nextCursor: null, prevCursor: null });
+	});
+
+	describe("getDatabasesList system filtering", () => {
+		const systemRows = [
+			{ name: "admin", sizeOnDisk: 40960 },
+			{ name: "config", sizeOnDisk: 1024 },
+			{ name: "myapp", sizeOnDisk: 1258291 },
+			{ name: "local", sizeOnDisk: 512 },
+		];
+
+		it("filters admin/config/local when current is a user db", async () => {
+			mockGetMongoDbName.mockReturnValue("myapp");
+			mocks.admin.listDatabases.mockResolvedValue({ databases: systemRows });
+			const result = await adapter.getDatabasesList();
+			expect(result.map((d) => d.name)).toEqual(["myapp"]);
+		});
+
+		it("keeps the current db when it is a system db", async () => {
+			mockGetMongoDbName.mockReturnValue("admin");
+			mocks.admin.listDatabases.mockResolvedValue({ databases: systemRows });
+			const result = await adapter.getDatabasesList();
+			expect(result.map((d) => d.name)).toEqual(["admin", "myapp"]);
+		});
+
+		it("falls back to the full list when only system dbs exist", async () => {
+			mockGetMongoDbName.mockReturnValue("testdb");
+			mocks.admin.listDatabases.mockResolvedValue({
+				databases: [
+					{ name: "admin", sizeOnDisk: 40960 },
+					{ name: "local", sizeOnDisk: 1024 },
+				],
+			});
+			const result = await adapter.getDatabasesList();
+			expect(result.map((d) => d.name)).toEqual(["admin", "local"]);
+		});
 	});
 });

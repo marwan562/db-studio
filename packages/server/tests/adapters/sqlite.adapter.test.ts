@@ -951,4 +951,39 @@ describe("SqliteAdapter — getTableColumns with FK mapping", () => {
 		expect(pkCol?.isPrimaryKey).toBe(true);
 		expect(pkCol?.isForeignKey).toBe(false);
 	});
+
+	describe("getDatabasesList system filtering", () => {
+		it("hides the internal temp database", async () => {
+			db.prepare.mockImplementation((sql: string) => ({
+				all: vi.fn(() =>
+					sql.toUpperCase().includes("DATABASE_LIST")
+						? [
+								{ seq: 0, name: "main", file: "/tmp/test.db" },
+								{ seq: 1, name: "temp", file: "" },
+							]
+						: handleAll(sql),
+				),
+				get: vi.fn((..._args: unknown[]) => handleGet(sql)),
+				run: vi.fn(() => ({ changes: 1, lastInsertRowid: 1 })),
+				reader: /^\s*(SELECT|PRAGMA)/i.test(sql.trim()),
+			}));
+			const result = await adapter.getDatabasesList();
+			expect(result.map((d) => d.name)).toEqual(["main"]);
+		});
+
+		it("falls back to the full list when filtering would empty it", async () => {
+			db.prepare.mockImplementation((sql: string) => ({
+				all: vi.fn(() =>
+					sql.toUpperCase().includes("DATABASE_LIST")
+						? [{ seq: 1, name: "temp", file: "" }]
+						: handleAll(sql),
+				),
+				get: vi.fn((..._args: unknown[]) => handleGet(sql)),
+				run: vi.fn(() => ({ changes: 1, lastInsertRowid: 1 })),
+				reader: /^\s*(SELECT|PRAGMA)/i.test(sql.trim()),
+			}));
+			const result = await adapter.getDatabasesList();
+			expect(result.map((d) => d.name)).toEqual(["temp"]);
+		});
+	});
 });
