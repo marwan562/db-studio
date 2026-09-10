@@ -43,7 +43,8 @@ export const AddRecordField = ({
 	isForeignKey,
 	referencedTable,
 	referencedColumn,
-}: ColumnInfoSchemaType) => {
+	hideLabel = false,
+}: ColumnInfoSchemaType & { hideLabel?: boolean }) => {
 	const [, setReferencedActiveTable] = useQueryState(
 		CONSTANTS.REFERENCED_TABLE_STATE_KEYS.ACTIVE_TABLE,
 	);
@@ -494,15 +495,24 @@ export const AddRecordField = ({
 			key={columnName}
 			control={control}
 			name={columnName}
-			render={({ field }) => (
-				<div className="grid grid-cols-3 gap-4">
-					<div className="col-span-1 flex flex-col gap-1">
-						<Label htmlFor={columnName}>{columnName}</Label>
-						<span className="text-xs text-muted-foreground">{dataTypeLabel}</span>
+			render={({ field }) =>
+				hideLabel ? (
+					<div
+						role="group"
+						aria-label={columnName}
+					>
+						{renderInputField(field)}
 					</div>
-					<div className="col-span-2 w-full">{renderInputField(field)}</div>
-				</div>
-			)}
+				) : (
+					<div className="grid grid-cols-3 gap-4">
+						<div className="col-span-1 flex flex-col gap-1">
+							<Label htmlFor={columnName}>{columnName}</Label>
+							<span className="text-xs text-muted-foreground">{dataTypeLabel}</span>
+						</div>
+						<div className="col-span-2 w-full">{renderInputField(field)}</div>
+					</div>
+				)
+			}
 		/>
 	);
 };
