@@ -81,4 +81,20 @@ describe("useUpdateRecord", () => {
 		).rejects.toThrow("At least one field is required");
 		expect(updateRecords).not.toHaveBeenCalled();
 	});
+
+	it("propagates api failures to the caller instead of the toast id", async () => {
+		updateRecords.mockRejectedValue(new Error("boom"));
+		const { wrapper } = createWrapper();
+		const { result } = renderHook(() => useUpdateRecord({ tableName: "users" }), {
+			wrapper,
+		});
+
+		await expect(
+			result.current.updateRecord({
+				rowData: { id: 1 },
+				updates: [{ columnName: "name", value: "Grace" }],
+				primaryKey: "id",
+			}),
+		).rejects.toThrow("boom");
+	});
 });

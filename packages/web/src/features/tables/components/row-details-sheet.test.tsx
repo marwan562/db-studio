@@ -239,6 +239,22 @@ describe("RowDetailsSheet", () => {
 		});
 	});
 
+	it("keeps the sheet open with edits intact when saving fails", async () => {
+		fixtures.updateRecord.mockRejectedValueOnce(new Error("boom"));
+		renderSheet();
+
+		const nameInput = screen.getByDisplayValue("Ada");
+		await user.clear(nameInput);
+		await user.type(nameInput, "Grace");
+		await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+		await waitFor(() => {
+			expect(fixtures.updateRecord).toHaveBeenCalledTimes(1);
+		});
+		expect(screen.getByText("Row details")).toBeInTheDocument();
+		expect(screen.getByDisplayValue("Grace")).toBeInTheDocument();
+	});
+
 	it("asks for confirmation before changing the primary key", async () => {
 		fixtures.cols = [
 			{

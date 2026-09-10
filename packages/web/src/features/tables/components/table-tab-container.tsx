@@ -30,11 +30,13 @@ export const TableTabContainer = ({ tableName }: { tableName: string }) => {
 		tableDataRows,
 	});
 
-	// Visible-order rows for the details sheet. Memoized so the sheet does
-	// not re-render on every grid render.
+	// Visible-order rows for the details sheet. useReactTable keeps a stable
+	// table instance (setOptions per render), so the memo must key on the
+	// row-model output itself, not the table, or the sheet keeps stale rows.
+	const rowModel = table.getRowModel();
 	const visibleRows = useMemo(
-		() => table.getRowModel().rows.map((gridRow) => gridRow.original),
-		[table],
+		() => rowModel.rows.map((gridRow) => gridRow.original),
+		[rowModel],
 	);
 
 	// A stale selection must never survive a table switch or unmount.
