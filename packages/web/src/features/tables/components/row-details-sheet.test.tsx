@@ -190,6 +190,11 @@ describe("RowDetailsSheet", () => {
 		expect(screen.getByRole("group", { name: "is_active" })).toBeInTheDocument();
 		expect(screen.getByRole("group", { name: "role" })).toBeInTheDocument();
 		expect(screen.getByRole("group", { name: "created" })).toBeInTheDocument();
+		// Text, number, and JSON inputs are named directly.
+		expect(screen.getByRole("textbox", { name: "name" })).toBeInTheDocument();
+		expect(screen.getByRole("spinbutton", { name: "age" })).toBeInTheDocument();
+		expect(screen.getByRole("textbox", { name: "meta" })).toBeInTheDocument();
+		expect(screen.getByRole("combobox", { name: "is_active" })).toBeInTheDocument();
 	});
 
 	it("renders generated primary keys read-only", () => {
