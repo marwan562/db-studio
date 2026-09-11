@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	buildRowUpdates,
 	getPrimaryKeyColumn,
+	getRecordIdentity,
 	isGeneratedColumn,
 	toFormValues,
 } from "./row-details-utils";
@@ -63,6 +64,34 @@ describe("row-details-utils", () => {
 		it("returns undefined without a primary key", () => {
 			expect(getPrimaryKeyColumn([])).toBeUndefined();
 			expect(getPrimaryKeyColumn(undefined)).toBeUndefined();
+		});
+	});
+
+	describe("getRecordIdentity", () => {
+		it("returns primary key identity for single key", () => {
+			expect(getRecordIdentity({ id: 1, code: "A" }, [...cols])).toBe("id:1");
+		});
+
+		it("returns composite primary key identity", () => {
+			const compositeCols = [
+				{ ...cols[0], columnName: "tenant_id", isPrimaryKey: true },
+				{ ...cols[1], columnName: "user_id", isPrimaryKey: true },
+			];
+			expect(getRecordIdentity({ tenant_id: "org_1", user_id: 42 }, compositeCols)).toBe(
+				"tenant_id:org_1|user_id:42",
+			);
+		});
+
+		it("falls back to id column without a primary key", () => {
+			const nonPkCols = cols.map((col) => ({ ...col, isPrimaryKey: false }));
+			expect(getRecordIdentity({ id: 123, code: "A" }, nonPkCols)).toBe("id:123");
+		});
+
+		it("returns undefined when no key or id is present", () => {
+			const noIdCols = [{ ...cols[1], columnName: "title", isPrimaryKey: false }];
+			expect(getRecordIdentity({ title: "test" }, noIdCols)).toBeUndefined();
+			expect(getRecordIdentity(undefined, cols)).toBeUndefined();
+			expect(getRecordIdentity({ id: 1 }, undefined)).toBeUndefined();
 		});
 	});
 

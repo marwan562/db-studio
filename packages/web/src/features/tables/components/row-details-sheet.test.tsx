@@ -490,4 +490,81 @@ describe("RowDetailsSheet", () => {
 		);
 		expect(await screen.findByDisplayValue("Bob")).toBeInTheDocument();
 	});
+
+	it("resets all fields when untouched draft receives refreshed row data", () => {
+		useOverlayStore.getState().openOverlay("tables.row-details");
+		useRowDetailsStore.getState().setRowDetails("users", 0);
+		const { rerender } = render(
+			<RowDetailsSheet
+				tableName="users"
+				rows={fixtures.rows}
+			/>,
+		);
+
+		expect(screen.getByDisplayValue("Ada")).toBeInTheDocument();
+
+		const updatedRows = makeRows();
+		updatedRows[0] = { ...updatedRows[0], name: "Ada Lovelace" };
+		rerender(
+			<RowDetailsSheet
+				tableName="users"
+				rows={updatedRows}
+			/>,
+		);
+
+		expect(screen.getByDisplayValue("Ada Lovelace")).toBeInTheDocument();
+	});
+
+	it("preserves dirty fields when refreshed row has the same record identity", async () => {
+		useOverlayStore.getState().openOverlay("tables.row-details");
+		useRowDetailsStore.getState().setRowDetails("users", 0);
+		const { rerender } = render(
+			<RowDetailsSheet
+				tableName="users"
+				rows={fixtures.rows}
+			/>,
+		);
+
+		const nameInput = screen.getByDisplayValue("Ada");
+		await user.clear(nameInput);
+		await user.type(nameInput, "Grace");
+
+		const updatedRows = makeRows();
+		updatedRows[0] = { ...updatedRows[0], age: 37 };
+		rerender(
+			<RowDetailsSheet
+				tableName="users"
+				rows={updatedRows}
+			/>,
+		);
+
+		expect(screen.getByDisplayValue("Grace")).toBeInTheDocument();
+		expect(screen.getByDisplayValue("37")).toBeInTheDocument();
+	});
+
+	it("resets to new record values when row identity changes underneath", async () => {
+		useOverlayStore.getState().openOverlay("tables.row-details");
+		useRowDetailsStore.getState().setRowDetails("users", 0);
+		const { rerender } = render(
+			<RowDetailsSheet
+				tableName="users"
+				rows={fixtures.rows}
+			/>,
+		);
+
+		const nameInput = screen.getByDisplayValue("Ada");
+		await user.clear(nameInput);
+		await user.type(nameInput, "Grace");
+
+		const reorderedRows = [fixtures.rows[1], fixtures.rows[0]];
+		rerender(
+			<RowDetailsSheet
+				tableName="users"
+				rows={reorderedRows}
+			/>,
+		);
+
+		expect(screen.getByDisplayValue("Bob")).toBeInTheDocument();
+		expect(screen.queryByDisplayValue("Grace")).not.toBeInTheDocument();
+	});
 });

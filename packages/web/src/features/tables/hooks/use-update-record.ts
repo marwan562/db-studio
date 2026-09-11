@@ -64,16 +64,13 @@ export const useUpdateRecord = ({ tableName }: { tableName: string }) => {
 		if (updates.length === 0) {
 			throw new Error("At least one field is required");
 		}
-		// toast.promise resolves with the toast id even on failure, so it
-		// cannot be the caller's promise. Display through it, but return the
-		// raw mutation promise so failures propagate to the caller's catch.
-		const pending = updateRecordMutation({ rowData, updates, primaryKey });
-		toast.promise(pending, {
-			loading: "Saving changes...",
-			success: (message) => message || "Record updated successfully",
-			error: (error: Error) => error.message || "Failed to update record",
-		});
-		return pending;
+		return toast
+			.promise(updateRecordMutation({ rowData, updates, primaryKey }), {
+				loading: "Saving changes...",
+				success: (message) => message || "Record updated successfully",
+				error: (error: Error) => error.message || "Failed to update record",
+			})
+			.unwrap();
 	};
 
 	return {

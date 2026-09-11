@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useOverlayStore } from "@/stores/overlay.store";
 import { useRowDetailsStore } from "../stores/row-details.store";
@@ -115,8 +116,29 @@ describe("TableTabContainer row details wiring", () => {
 		];
 		rerender(<TableTabContainer tableName="users" />);
 
-		// Read-only cells follow the live row; the draft keeps its values.
+		// Untouched drafts update all displayed fields to follow the refreshed row.
 		expect(await screen.findByText("2")).toBeInTheDocument();
-		expect(screen.getByDisplayValue("Ada")).toBeInTheDocument();
+		expect(screen.getByDisplayValue("Bob")).toBeInTheDocument();
+	});
+
+	it("preserves dirty field values when the refreshed row has the same stable record identity", async () => {
+		useOverlayStore.getState().openOverlay("tables.row-details");
+		useRowDetailsStore.getState().setRowDetails("users", 0);
+		const user = userEvent.setup();
+		const { rerender } = render(<TableTabContainer tableName="users" />);
+
+		const nameInput = await screen.findByDisplayValue("Ada");
+		await user.clear(nameInput);
+		await user.type(nameInput, "Grace");
+
+		// Simulate background data refresh for the same record (id: 1)
+		fixtures.gridRows = [
+			{ original: { id: 1, name: "Ada" } },
+			{ original: { id: 2, name: "Bob" } },
+		];
+		rerender(<TableTabContainer tableName="users" />);
+
+		expect(screen.getByRole("group", { name: "id" })).toHaveTextContent("1");
+		expect(screen.getByDisplayValue("Grace")).toBeInTheDocument();
 	});
 });

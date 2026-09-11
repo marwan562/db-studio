@@ -12,7 +12,7 @@ import {
 } from "@db-studio/ui/alert-dialog";
 import { Button } from "@db-studio/ui/button";
 import { Check, ChevronDown, ChevronUp, Copy, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FormProvider, useForm, useFormContext } from "react-hook-form";
 import { useHotkeys } from "react-hotkeys-hook";
 import { SheetSidebar } from "@/components/sheet-sidebar";
@@ -28,6 +28,7 @@ import {
 	buildRowUpdates,
 	copyTextToClipboard,
 	getPrimaryKeyColumn,
+	getRecordIdentity,
 	isGeneratedColumn,
 	toFormValues,
 } from "./row-details-utils";
@@ -160,14 +161,74 @@ export const RowDetailsSheet = ({
 		? Boolean(formState.dirtyFields[primaryKeyColumn.columnName])
 		: false;
 
-	// Reset the form when a different row is selected. `row` itself is
-	// intentionally excluded: background refetches allocate new row objects
-	// with identical content, and resetting on those would wipe in-progress
-	// edits. Reordering underneath an open modal sheet cannot happen (Radix
-	// dialogs are modal), so index-anchored selection stays correct.
+	const lastRowRef = useRef<TableRecord | undefined>(undefined);
+	const lastRecordIdentityRef = useRef<string | undefined>(undefined);
+	const lastRowIndexRef = useRef<number | null>(null);
+	const lastTableNameRef = useRef<string | null>(null);
+	const lastColsSigRef = useRef<string>(columnsSignature);
+
+	// Synchronize form values with the active row. An untouched draft resets from
+	// the refreshed row so displayed values stay consistent. Dirty edits are preserved
+	// only when the refreshed row has the same stable record identity.
 	useEffect(() => {
-		methods.reset(toFormValues(row, tableCols));
-	}, [methods, tableName, rowIndex, columnsSignature]);
+		const currentIdentity = getRecordIdentity(row, tableCols);
+		const isSameSelection =
+			tableName === lastTableNameRef.current &&
+			rowIndex === lastRowIndexRef.current &&
+			columnsSignature === lastColsSigRef.current;
+
+		if (!isSameSelection) {
+			lastTableNameRef.current = tableName;
+			lastRowIndexRef.current = rowIndex;
+			lastColsSigRef.current = columnsSignature;
+			lastRowRef.current = row;
+			lastRecordIdentityRef.current = currentIdentity;
+			methods.reset(toFormValues(row, tableCols));
+			return;
+		}
+
+		if (row === lastRowRef.current) {
+			return;
+		}
+		lastRowRef.current = row;
+
+		const freshValues = toFormValues(row, tableCols);
+
+		if (!isDirty) {
+			lastRecordIdentityRef.current = currentIdentity;
+			methods.reset(freshValues);
+			return;
+		}
+
+		const sameIdentity =
+			currentIdentity !== undefined &&
+			lastRecordIdentityRef.current !== undefined &&
+			currentIdentity === lastRecordIdentityRef.current;
+
+		if (sameIdentity) {
+			const dirtyFields = formState.dirtyFields;
+			const currentValues = methods.getValues();
+			const mergedValues: Record<string, string> = { ...freshValues };
+			for (const [key, isFieldDirty] of Object.entries(dirtyFields)) {
+				if (isFieldDirty && key in currentValues) {
+					mergedValues[key] = currentValues[key];
+				}
+			}
+			methods.reset(mergedValues, { keepDirty: true });
+		} else {
+			lastRecordIdentityRef.current = currentIdentity;
+			methods.reset(freshValues);
+		}
+	}, [
+		row,
+		tableCols,
+		tableName,
+		rowIndex,
+		columnsSignature,
+		methods,
+		isDirty,
+		formState.dirtyFields,
+	]);
 
 	// The selected index can fall off the page after the data changes.
 	useEffect(() => {
