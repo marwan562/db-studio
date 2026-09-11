@@ -72,12 +72,13 @@ export const useLiveModeStore = create<LiveModeStore>()((set, get) => ({
 	},
 
 	setHighlights: (rowIds, cellKeys, durationMs = 1500) => {
-		if (highlightTimer) {
-			clearTimeout(highlightTimer);
+		if (rowIds.length === 0 && cellKeys.length === 0) {
+			get().clearHighlights();
+			return;
 		}
 
-		if (rowIds.length === 0 && cellKeys.length === 0) {
-			return;
+		if (highlightTimer) {
+			clearTimeout(highlightTimer);
 		}
 
 		set({

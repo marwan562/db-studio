@@ -9,7 +9,17 @@ describe("getRecordKey", () => {
 
 	it("supports composite primary keys", () => {
 		const row = { orgId: "org-1", userId: "usr-2", role: "admin" };
-		expect(getRecordKey(row, ["orgId", "userId"])).toBe("org-1::usr-2");
+		expect(getRecordKey(row, ["orgId", "userId"])).toBe('["org-1","usr-2"]');
+	});
+
+	it("distinguishes composite keys containing delimiter characters", () => {
+		const rowA = { part1: "a::b", part2: "c" };
+		const rowB = { part1: "a", part2: "b::c" };
+		expect(getRecordKey(rowA, ["part1", "part2"])).not.toBe(
+			getRecordKey(rowB, ["part1", "part2"]),
+		);
+		expect(getRecordKey(rowA, ["part1", "part2"])).toBe('["a::b","c"]');
+		expect(getRecordKey(rowB, ["part1", "part2"])).toBe('["a","b::c"]');
 	});
 
 	it("falls back to id when no primary key is specified", () => {
@@ -109,7 +119,7 @@ describe("diffTableRows", () => {
 		];
 		const result = diffTableRows(prev, next, pk);
 		expect(result.hasVisibleChanges).toBe(true);
-		expect(result.insertedRowIds).toEqual(["sales::20"]);
-		expect(result.changedCellKeys).toEqual(["eng::10:title"]);
+		expect(result.insertedRowIds).toEqual(['["sales",20]']);
+		expect(result.changedCellKeys).toEqual(['["eng",10]:title']);
 	});
 });

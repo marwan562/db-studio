@@ -38,6 +38,7 @@ export const useLiveTable = ({
 	const isRowHighlighted = useLiveModeStore((state) => state.isRowHighlighted);
 	const isCellHighlighted = useLiveModeStore((state) => state.isCellHighlighted);
 	const reset = useLiveModeStore((state) => state.reset);
+	const selectedDatabase = useDatabaseStore((state) => state.selectedDatabase);
 
 	const hasCellUpdates = useUpdateCellStore((state) => state.hasAnyUpdates());
 	const hasOpenRecordOverlay = useOverlayStore((state) =>
@@ -54,10 +55,16 @@ export const useLiveTable = ({
 	const prevRowsRef = useRef<TableRecord[] | null>(null);
 	const refetchRef = useRef(refetchTableData);
 	refetchRef.current = refetchTableData;
+	const sessionRef = useRef(0);
+	const tableNameRef = useRef(tableName);
+	tableNameRef.current = tableName;
+	const selectedDatabaseRef = useRef(selectedDatabase);
+	selectedDatabaseRef.current = selectedDatabase;
 
 	// Pause Live mode when editing begins
 	useEffect(() => {
 		if (isLive && isEditing) {
+			sessionRef.current += 1;
 			pauseLive();
 		}
 	}, [isLive, isEditing, pauseLive]);
@@ -80,23 +87,46 @@ export const useLiveTable = ({
 			return;
 		}
 		if (isEditing) {
+			sessionRef.current += 1;
 			pauseLive();
 			return;
 		}
 
+		const currentSession = sessionRef.current;
+		const currentTable = tableNameRef.current;
+		const currentDatabase = selectedDatabaseRef.current;
+
 		try {
 			const res = await refetchRef.current();
+			const liveState = useLiveModeStore.getState();
+			if (
+				sessionRef.current !== currentSession ||
+				!liveState.isLive ||
+				tableNameRef.current !== currentTable ||
+				selectedDatabaseRef.current !== currentDatabase
+			) {
+				return;
+			}
+
 			if (res && typeof res === "object" && "isError" in res && res.isError) {
 				setStatus("disconnected");
 			} else {
 				setStatus("healthy");
 			}
 		} catch {
+			const liveState = useLiveModeStore.getState();
+			if (
+				sessionRef.current !== currentSession ||
+				!liveState.isLive ||
+				tableNameRef.current !== currentTable ||
+				selectedDatabaseRef.current !== currentDatabase
+			) {
+				return;
+			}
+
 			setStatus("disconnected");
 		}
 	}, [isEditing, pauseLive, setStatus]);
-
-	const selectedDatabase = useDatabaseStore((state) => state.selectedDatabase);
 
 	// 1-second polling interval lifecycle
 	useEffect(() => {
@@ -134,13 +164,16 @@ export const useLiveTable = ({
 
 	// Cleanup on table, database, or route switch
 	useEffect(() => {
+		sessionRef.current += 1;
 		return () => {
+			sessionRef.current += 1;
 			reset();
 		};
 	}, [tableName, selectedDatabase, reset]);
 
 	const toggleLive = useCallback(() => {
 		if (!canLiveMode) return;
+		sessionRef.current += 1;
 		if (isLive) {
 			setLive(false);
 		} else {

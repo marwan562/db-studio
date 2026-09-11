@@ -73,6 +73,17 @@ describe("useLiveModeStore", () => {
 		vi.useRealTimers();
 	});
 
+	it("clears active highlights when setHighlights is called with empty arrays", () => {
+		vi.useFakeTimers();
+		useLiveModeStore.getState().setHighlights(["row-1"], ["row-1:title"]);
+		expect(useLiveModeStore.getState().isRowHighlighted("row-1")).toBe(true);
+
+		useLiveModeStore.getState().setHighlights([], []);
+		expect(useLiveModeStore.getState().isRowHighlighted("row-1")).toBe(false);
+		expect(useLiveModeStore.getState().isCellHighlighted("row-1", "title")).toBe(false);
+		vi.useRealTimers();
+	});
+
 	it("resets all state cleanly", () => {
 		useLiveModeStore.getState().setLive(true, "users");
 		useLiveModeStore.getState().setHighlights(["1"], ["1:name"]);

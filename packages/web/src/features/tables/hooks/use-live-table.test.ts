@@ -10,7 +10,7 @@ import { useLiveTable } from "./use-live-table";
 describe("useLiveTable", () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
-		useDatabaseStore.setState({ dbType: "pg" });
+		useDatabaseStore.setState({ dbType: "pg", selectedDatabase: "default_db" });
 		useLiveModeStore.getState().reset();
 		useUpdateCellStore.getState().clearUpdates();
 		useOverlayStore.getState().closeAllOverlays();
@@ -274,6 +274,89 @@ describe("useLiveTable", () => {
 		});
 
 		expect(useLiveModeStore.getState().isLive).toBe(false);
+		expect(useLiveModeStore.getState().status).toBe("idle");
+	});
+
+	it("ignores in-flight poll completion after editing pauses Live mode", async () => {
+		let resolvePoll: ((value: unknown) => void) | null = null;
+		const refetch = vi.fn().mockImplementation(
+			() =>
+				new Promise((resolve) => {
+					resolvePoll = resolve;
+				}),
+		);
+		let isEditingCell = false;
+
+		const { rerender } = renderHook(() =>
+			useLiveTable({
+				tableName: "users",
+				tableDataRows: [],
+				refetchTableData: refetch,
+				isEditingCell,
+			}),
+		);
+
+		act(() => {
+			useLiveModeStore.getState().setLive(true, "users");
+		});
+
+		await act(async () => {
+			vi.advanceTimersByTime(1000);
+		});
+		expect(refetch).toHaveBeenCalled();
+
+		isEditingCell = true;
+		act(() => {
+			rerender();
+		});
+		expect(useLiveModeStore.getState().status).toBe("paused");
+		expect(useLiveModeStore.getState().isLive).toBe(false);
+
+		await act(async () => {
+			resolvePoll?.({ isError: false });
+		});
+
+		expect(useLiveModeStore.getState().status).toBe("paused");
+	});
+
+	it("ignores in-flight poll completion after database switch", async () => {
+		let resolvePoll: ((value: unknown) => void) | null = null;
+		const refetch = vi.fn().mockImplementation(
+			() =>
+				new Promise((resolve) => {
+					resolvePoll = resolve;
+				}),
+		);
+
+		const { rerender } = renderHook(() =>
+			useLiveTable({
+				tableName: "users",
+				tableDataRows: [],
+				refetchTableData: refetch,
+			}),
+		);
+
+		act(() => {
+			useLiveModeStore.getState().setLive(true, "users");
+		});
+
+		await act(async () => {
+			vi.advanceTimersByTime(1000);
+		});
+		expect(refetch).toHaveBeenCalled();
+
+		act(() => {
+			useDatabaseStore.setState({ selectedDatabase: "other_db" });
+		});
+		act(() => {
+			rerender();
+		});
+		expect(useLiveModeStore.getState().status).toBe("idle");
+
+		await act(async () => {
+			resolvePoll?.({ isError: false });
+		});
+
 		expect(useLiveModeStore.getState().status).toBe("idle");
 	});
 });

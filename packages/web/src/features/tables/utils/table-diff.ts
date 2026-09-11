@@ -13,8 +13,11 @@ export const stableStringify = (value: unknown): string => {
 };
 
 export const getRecordKey = (row: TableRecord, primaryKeyCols: string[] = []): string => {
-	if (primaryKeyCols.length > 0) {
-		return primaryKeyCols.map((col) => String(row[col] ?? "")).join("::");
+	if (primaryKeyCols.length === 1) {
+		return String(row[primaryKeyCols[0]] ?? "");
+	}
+	if (primaryKeyCols.length > 1) {
+		return stableStringify(primaryKeyCols.map((col) => row[col]));
 	}
 	if (row.id !== undefined && row.id !== null) return String(row.id);
 	if (row._id !== undefined && row._id !== null) return String(row._id);
