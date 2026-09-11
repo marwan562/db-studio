@@ -567,4 +567,47 @@ describe("RowDetailsSheet", () => {
 		expect(screen.getByDisplayValue("Bob")).toBeInTheDocument();
 		expect(screen.queryByDisplayValue("Grace")).not.toBeInTheDocument();
 	});
+
+	it("preserves dirty state and baseline after row refresh and subsequent edits", async () => {
+		useOverlayStore.getState().openOverlay("tables.row-details");
+		useRowDetailsStore.getState().setRowDetails("users", 0);
+		const { rerender } = render(
+			<RowDetailsSheet
+				tableName="users"
+				rows={fixtures.rows}
+			/>,
+		);
+
+		const nameInput = screen.getByDisplayValue("Ada");
+		await user.clear(nameInput);
+		await user.type(nameInput, "Grace");
+
+		const saveButton = screen.getByRole("button", { name: "Save changes" });
+		expect(saveButton).toBeEnabled();
+
+		// Refresh from server with updated age, keeping same id: 1
+		const updatedRows = makeRows();
+		updatedRows[0] = { ...updatedRows[0], age: 37 };
+		rerender(
+			<RowDetailsSheet
+				tableName="users"
+				rows={updatedRows}
+			/>,
+		);
+
+		expect(screen.getByDisplayValue("Grace")).toBeInTheDocument();
+		expect(screen.getByDisplayValue("37")).toBeInTheDocument();
+		expect(saveButton).toBeEnabled();
+
+		// Change name again
+		await user.type(nameInput, " Hopper");
+		expect(screen.getByDisplayValue("Grace Hopper")).toBeInTheDocument();
+		expect(saveButton).toBeEnabled();
+
+		// Restore name back to Grace
+		await user.clear(nameInput);
+		await user.type(nameInput, "Grace");
+		expect(screen.getByDisplayValue("Grace")).toBeInTheDocument();
+		expect(saveButton).toBeEnabled();
+	});
 });

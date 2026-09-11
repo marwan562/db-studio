@@ -206,29 +206,12 @@ export const RowDetailsSheet = ({
 			currentIdentity === lastRecordIdentityRef.current;
 
 		if (sameIdentity) {
-			const dirtyFields = formState.dirtyFields;
-			const currentValues = methods.getValues();
-			const mergedValues: Record<string, string> = { ...freshValues };
-			for (const [key, isFieldDirty] of Object.entries(dirtyFields)) {
-				if (isFieldDirty && key in currentValues) {
-					mergedValues[key] = currentValues[key];
-				}
-			}
-			methods.reset(mergedValues, { keepDirty: true });
+			methods.reset(freshValues, { keepDirtyValues: true });
 		} else {
 			lastRecordIdentityRef.current = currentIdentity;
 			methods.reset(freshValues);
 		}
-	}, [
-		row,
-		tableCols,
-		tableName,
-		rowIndex,
-		columnsSignature,
-		methods,
-		isDirty,
-		formState.dirtyFields,
-	]);
+	}, [row, tableCols, tableName, rowIndex, columnsSignature, methods, isDirty]);
 
 	// The selected index can fall off the page after the data changes.
 	useEffect(() => {

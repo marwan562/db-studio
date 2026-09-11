@@ -69,22 +69,38 @@ describe("row-details-utils", () => {
 
 	describe("getRecordIdentity", () => {
 		it("returns primary key identity for single key", () => {
-			expect(getRecordIdentity({ id: 1, code: "A" }, [...cols])).toBe("id:1");
+			expect(getRecordIdentity({ id: 1, code: "A" }, [...cols])).toBe(
+				JSON.stringify([["id", "1"]]),
+			);
 		});
 
-		it("returns composite primary key identity", () => {
+		it("returns composite primary key identity without delimiter collisions", () => {
 			const compositeCols = [
 				{ ...cols[0], columnName: "tenant_id", isPrimaryKey: true },
 				{ ...cols[1], columnName: "user_id", isPrimaryKey: true },
 			];
-			expect(getRecordIdentity({ tenant_id: "org_1", user_id: 42 }, compositeCols)).toBe(
-				"tenant_id:org_1|user_id:42",
+			const id1 = getRecordIdentity({ tenant_id: "org:1|part", user_id: "42" }, compositeCols);
+			const id2 = getRecordIdentity({ tenant_id: "org", user_id: "1|part:42" }, compositeCols);
+			expect(id1).toBe(
+				JSON.stringify([
+					["tenant_id", "org:1|part"],
+					["user_id", "42"],
+				]),
 			);
+			expect(id2).toBe(
+				JSON.stringify([
+					["tenant_id", "org"],
+					["user_id", "1|part:42"],
+				]),
+			);
+			expect(id1).not.toBe(id2);
 		});
 
 		it("falls back to id column without a primary key", () => {
 			const nonPkCols = cols.map((col) => ({ ...col, isPrimaryKey: false }));
-			expect(getRecordIdentity({ id: 123, code: "A" }, nonPkCols)).toBe("id:123");
+			expect(getRecordIdentity({ id: 123, code: "A" }, nonPkCols)).toBe(
+				JSON.stringify(["id", "123"]),
+			);
 		});
 
 		it("returns undefined when no key or id is present", () => {

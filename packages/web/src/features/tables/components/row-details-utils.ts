@@ -33,11 +33,11 @@ export const getRecordIdentity = (
 	if (!row || !tableCols) return undefined;
 	const pkCols = tableCols.filter((col) => col.isPrimaryKey);
 	if (pkCols.length > 0) {
-		return pkCols.map((col) => `${col.columnName}:${String(row[col.columnName])}`).join("|");
+		return JSON.stringify(pkCols.map((col) => [col.columnName, String(row[col.columnName])]));
 	}
 	const idCol = tableCols.find((col) => col.columnName === "id");
 	if (idCol && row[idCol.columnName] !== undefined && row[idCol.columnName] !== null) {
-		return `id:${String(row[idCol.columnName])}`;
+		return JSON.stringify([idCol.columnName, String(row[idCol.columnName])]);
 	}
 	return undefined;
 };
