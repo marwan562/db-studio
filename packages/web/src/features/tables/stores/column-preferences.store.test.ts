@@ -2,17 +2,21 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
 	applyColumnPrefs,
 	clearColumnPrefs,
+	clearMemoryFallback,
 	loadColumnPrefs,
 	makeStorageKey,
 	reconcileColumnPrefs,
 	reorderColumns,
+	sameColumnPrefKey,
 	saveColumnPrefs,
+	subscribeColumnPrefsChanged,
 } from "./column-preferences.store";
 
 const parts = { dbType: "pg", database: "dbstudio", tableName: "users" };
 
 afterEach(() => {
 	clearColumnPrefs(parts);
+	clearMemoryFallback();
 });
 
 describe("load/save", () => {
@@ -20,6 +24,12 @@ describe("load/save", () => {
 		expect(loadColumnPrefs(parts)).toEqual({ order: [], hidden: [] });
 		saveColumnPrefs(parts, { order: ["b", "a"], hidden: ["b"] });
 		expect(loadColumnPrefs(parts)).toEqual({ order: ["b", "a"], hidden: ["b"] });
+	});
+
+	it("produces distinct storage keys when database or table names contain colons", () => {
+		const keyA = makeStorageKey({ dbType: "pg", database: "a:b", tableName: "c" });
+		const keyB = makeStorageKey({ dbType: "pg", database: "a", tableName: "b:c" });
+		expect(keyA).not.toBe(keyB);
 	});
 
 	it("keeps preferences isolated between tables and databases", () => {
@@ -40,6 +50,50 @@ describe("load/save", () => {
 			JSON.stringify({ order: ["a", 42, null], hidden: "oops", extra: true }),
 		);
 		expect(loadColumnPrefs(parts)).toEqual({ order: ["a"], hidden: [] });
+	});
+
+	it("synchronizes preferences via in-memory fallback when storage setItem throws", () => {
+		const throwingStorage = {
+			getItem: () => null,
+			setItem: () => {
+				throw new Error("QuotaExceededError");
+			},
+			removeItem: () => {},
+		};
+
+		saveColumnPrefs(parts, { order: ["col2", "col1"], hidden: ["col2"] }, throwingStorage);
+
+		expect(loadColumnPrefs(parts, throwingStorage)).toEqual({
+			order: ["col2", "col1"],
+			hidden: ["col2"],
+		});
+	});
+
+	it("notifies listeners and clears in-memory fallback when removeItem throws", () => {
+		let notified = false;
+		const unsubscribe = subscribeColumnPrefsChanged((changed) => {
+			if (sameColumnPrefKey(changed, parts)) notified = true;
+		});
+
+		const failingStorage = {
+			getItem: () => null,
+			setItem: () => {
+				throw new Error("fail");
+			},
+			removeItem: () => {
+				throw new Error("fail");
+			},
+		};
+
+		saveColumnPrefs(parts, { order: ["a"], hidden: [] }, failingStorage);
+		expect(loadColumnPrefs(parts, failingStorage)).toEqual({ order: ["a"], hidden: [] });
+
+		notified = false;
+		clearColumnPrefs(parts, failingStorage);
+		expect(notified).toBe(true);
+		expect(loadColumnPrefs(parts, failingStorage)).toEqual({ order: [], hidden: [] });
+
+		unsubscribe();
 	});
 });
 

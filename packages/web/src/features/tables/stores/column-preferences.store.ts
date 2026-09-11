@@ -38,7 +38,7 @@ export const sameColumnPrefs = (a: ColumnPrefs, b: ColumnPrefs): boolean =>
 	a.hidden.every((name, i) => name === b.hidden[i]);
 
 export const makeStorageKey = ({ dbType, database, tableName }: ColumnPrefKeyParts): string =>
-	`${STORAGE_PREFIX}${dbType}:${database}:${tableName}`;
+	`${STORAGE_PREFIX}${JSON.stringify([dbType, database, tableName])}`;
 
 const sanitize = (value: unknown): ColumnPrefs => {
 	const raw = (value ?? {}) as Partial<ColumnPrefs>;
@@ -49,16 +49,29 @@ const sanitize = (value: unknown): ColumnPrefs => {
 	return { order, hidden };
 };
 
+const memoryFallback = new Map<string, ColumnPrefs>();
+
+export const clearMemoryFallback = (): void => {
+	memoryFallback.clear();
+};
+
 export const loadColumnPrefs = (
 	parts: ColumnPrefKeyParts,
 	storage: Pick<Storage, "getItem" | "setItem" | "removeItem"> = window.localStorage,
 ): ColumnPrefs => {
+	const key = makeStorageKey(parts);
 	try {
-		const raw = storage.getItem(makeStorageKey(parts));
-		return raw ? sanitize(JSON.parse(raw)) : { order: [], hidden: [] };
+		const raw = storage.getItem(key);
+		if (raw) {
+			return sanitize(JSON.parse(raw));
+		}
 	} catch {
-		return { order: [], hidden: [] };
+		// storage unavailable or getItem failed; fall back to in-memory store
 	}
+	const fallback = memoryFallback.get(key);
+	return fallback
+		? { order: [...fallback.order], hidden: [...fallback.hidden] }
+		: { order: [], hidden: [] };
 };
 
 export const saveColumnPrefs = (
@@ -66,24 +79,30 @@ export const saveColumnPrefs = (
 	prefs: ColumnPrefs,
 	storage: Pick<Storage, "getItem" | "setItem" | "removeItem"> = window.localStorage,
 ): void => {
+	const key = makeStorageKey(parts);
+	const sanitized = sanitize(prefs);
 	try {
-		storage.setItem(makeStorageKey(parts), JSON.stringify(prefs));
-		notifyPrefsChanged(parts);
+		storage.setItem(key, JSON.stringify(sanitized));
+		memoryFallback.delete(key);
 	} catch {
 		// storage full or unavailable; preferences become session-only
+		memoryFallback.set(key, sanitized);
 	}
+	notifyPrefsChanged(parts);
 };
 
 export const clearColumnPrefs = (
 	parts: ColumnPrefKeyParts,
 	storage: Pick<Storage, "getItem" | "setItem" | "removeItem"> = window.localStorage,
 ): void => {
+	const key = makeStorageKey(parts);
+	memoryFallback.delete(key);
 	try {
-		storage.removeItem(makeStorageKey(parts));
-		notifyPrefsChanged(parts);
+		storage.removeItem(key);
 	} catch {
 		// ignore
 	}
+	notifyPrefsChanged(parts);
 };
 
 /**
