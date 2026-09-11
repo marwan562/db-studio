@@ -1,5 +1,5 @@
 import type { ColumnInfoSchemaType } from "@db-studio/shared/types";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useDatabaseStore } from "@/stores/database.store";
 import {
 	applyColumnPrefs,
@@ -55,7 +55,9 @@ export const useColumnPreferences = ({
 	// `schemaKey` keeps this stable across re-renders that only change array
 	// identity; the no-op guard breaks any save→setPrefs→re-render cycle.
 	const schemaColsRef = useRef(schemaCols);
-	schemaColsRef.current = schemaCols;
+	useLayoutEffect(() => {
+		schemaColsRef.current = schemaCols;
+	}, [schemaCols]);
 	useEffect(() => {
 		if (schemaKey.length === 0) return;
 		const current = loadColumnPrefs(key);
